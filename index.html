@@ -187,7 +187,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue"
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-const SCRIPT = "https://script.google.com/macros/s/AKfycbxfIRBdlifhrelAlVJIsKU2GBM1n5uSQUQRsMSexaHlxrlYtwu0wAZ3_5Xm4P2d-6hU/exec";
+const SCRIPT = "https://script.google.com/macros/s/AKfycbx_8QgKsVmRv5KI1Hs5xpTus-pze5sxl9LlRcJYPAD1LI2tnBTrLl87sd55Bph-Pbl8/exec";
 const API_KEY = "AIzaSyBg9Hmhmyhjq3of3eqvFygJ3iPsuhVKj04";
 const SHEET_ID = "1L2caNP1jbBOVyH61wm8y3nwkpzS3sozA4SbpyDOgZBg";
 const GBASE = "https://sheets.googleapis.com/v4/spreadsheets";
@@ -269,7 +269,12 @@ async function scriptRead(sheet){
     const url=SCRIPT+"?sheet="+encodeURIComponent(sheet);
     const ctrl=new AbortController();
     const timer=setTimeout(()=>ctrl.abort(),15000);
-    const r=await fetch(url,{redirect:"follow",signal:ctrl.signal});
+    const r=await fetch(url,{
+      redirect:"follow",
+      signal:ctrl.signal,
+      credentials:"omit",
+      cache:"no-cache"
+    });
     clearTimeout(timer);
     const text=await r.text();
     if(!text||text.trim()==="") return [];
@@ -372,7 +377,12 @@ async function loadAll(){
     const url = SCRIPT + "?all=1";
     const ctrl = new AbortController();
     const timer = setTimeout(()=>ctrl.abort(), 20000);
-    const r = await fetch(url, {redirect:"follow", signal:ctrl.signal});
+    const r = await fetch(url, {
+      redirect:"follow",
+      signal:ctrl.signal,
+      credentials:"omit",
+      cache:"no-cache"
+    });
     clearTimeout(timer);
     const text = await r.text();
     const d = JSON.parse(text);
@@ -388,6 +398,7 @@ async function loadAll(){
       // Fallback: respuesta individual
       db.movARS = pMovARS(d.values);
     }
+    console.log("Cargados:",db.movARS.length,"movARS,",db.tars.length,"tars,",db.movUSD.length,"movUSD");
     setSS("ok","Sincronizado ✓ ("+db.movARS.length+" mov)");
   } catch(e){ setSS("err","Sin conexión"); console.error(e); throw e; }
 }
@@ -990,40 +1001,40 @@ async function addTx(){
 }
 
 async function init(){
-  // 1. Intentar cargar cache local del navegador (instantáneo)
+  // 1. Mostrar cache local inmediatamente si existe
   try{
     const cached = localStorage.getItem("finanzas_cache");
     if(cached){
       const parsed = JSON.parse(cached);
-      db.movARS = parsed.movARS||[];
-      db.tars   = parsed.tars||[];
-      db.movUSD = parsed.movUSD||[];
-      db.sav    = parsed.sav||[];
-      db.tarsUSD= parsed.tarsUSD||[];
-      // Mostrar app inmediatamente con datos cacheados
-      initMS(); renderAll();
-      document.getElementById("lov").style.display="none";
-      document.getElementById("app").style.display="flex";
-      setSS("load","Actualizando...");
+      if(parsed.movARS && parsed.movARS.length > 0){
+        db.movARS  = parsed.movARS||[];
+        db.tars    = parsed.tars||[];
+        db.movUSD  = parsed.movUSD||[];
+        db.sav     = parsed.sav||[];
+        db.tarsUSD = parsed.tarsUSD||[];
+        initMS(); renderAll();
+        document.getElementById("lov").style.display="none";
+        document.getElementById("app").style.display="flex";
+        setSS("load","Actualizando desde Google Sheets...");
+      }
     }
   } catch(e){ console.warn("Cache read error:", e); }
 
-  // 2. Cargar datos frescos del Sheet en background
+  // 2. Siempre cargar datos frescos del Sheet
   try{
     await loadAll();
-    // Guardar en cache local para la próxima apertura
+    // Guardar cache actualizado
     try{
       localStorage.setItem("finanzas_cache", JSON.stringify({
         movARS:db.movARS, tars:db.tars,
         movUSD:db.movUSD, sav:db.sav, tarsUSD:db.tarsUSD
       }));
-    } catch(e){ console.warn("Cache write error:", e); }
+    } catch(e){ console.warn("Cache write:", e); }
     initMS(); renderAll();
     document.getElementById("lov").style.display="none";
     document.getElementById("app").style.display="flex";
   } catch(e){
     console.error("Init error:", e);
-    // Si ya mostramos la app con cache, solo mostrar warning
     if(document.getElementById("app").style.display==="flex"){
       setSS("err","Sin conexión — mostrando datos guardados");
     } else {
