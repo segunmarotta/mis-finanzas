@@ -984,19 +984,49 @@ async function addTx(){
 }
 
 async function init(){
+  // 1. Intentar cargar cache local del navegador (instantáneo)
+  try{
+    const cached = localStorage.getItem("finanzas_cache");
+    if(cached){
+      const parsed = JSON.parse(cached);
+      db.movARS = parsed.movARS||[];
+      db.tars   = parsed.tars||[];
+      db.movUSD = parsed.movUSD||[];
+      db.sav    = parsed.sav||[];
+      db.tarsUSD= parsed.tarsUSD||[];
+      // Mostrar app inmediatamente con datos cacheados
+      initMS(); renderAll();
+      document.getElementById("lov").style.display="none";
+      document.getElementById("app").style.display="flex";
+      setSS("load","Actualizando...");
+    }
+  } catch(e){ console.warn("Cache read error:", e); }
+
+  // 2. Cargar datos frescos del Sheet en background
   try{
     await loadAll();
+    // Guardar en cache local para la próxima apertura
+    try{
+      localStorage.setItem("finanzas_cache", JSON.stringify({
+        movARS:db.movARS, tars:db.tars,
+        movUSD:db.movUSD, sav:db.sav, tarsUSD:db.tarsUSD
+      }));
+    } catch(e){ console.warn("Cache write error:", e); }
     initMS(); renderAll();
     document.getElementById("lov").style.display="none";
     document.getElementById("app").style.display="flex";
   } catch(e){
     console.error("Init error:", e);
-    document.getElementById("lov").innerHTML=`
-      <p style="color:var(--red);text-align:center;padding:20px;line-height:1.6;">
-        ❌ Error al conectar: ${e.message||"Sin respuesta"}<br><br>
-        Verificá que el servidor local esté corriendo.<br><br>
-        <button onclick="init()" style="padding:12px 24px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:15px;cursor:pointer;">🔄 Reintentar</button>
-      </p>`;
+    // Si ya mostramos la app con cache, solo mostrar warning
+    if(document.getElementById("app").style.display==="flex"){
+      setSS("err","Sin conexión — mostrando datos guardados");
+    } else {
+      document.getElementById("lov").innerHTML=`
+        <p style="color:var(--red);text-align:center;padding:20px;line-height:1.6;">
+          ❌ Error al conectar con Google Sheets.<br><br>
+          <button onclick="init()" style="padding:12px 24px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:15px;cursor:pointer;">🔄 Reintentar</button>
+        </p>`;
+    }
   }
 }
 init();
