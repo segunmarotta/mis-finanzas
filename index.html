@@ -368,20 +368,26 @@ function pSav(rows){
 async function loadAll(){
   setSS("load","Sincronizando...");
   try {
-    console.log("Cargando movARS...");
-    const mARS = await scriptRead(SH.movARS);
-    console.log("movARS OK:", mARS.length, "filas");
-    const tars = await scriptRead(SH.tars);
-    console.log("tars OK:", tars.length);
-    const mUSD = await scriptRead(SH.movUSD);
-    console.log("movUSD OK:", mUSD.length);
-    const sav = await scriptRead(SH.sav);
-    console.log("sav OK:", sav.length);
-    const tarsUSD = await scriptRead(SH.tarsUSD);
-    console.log("tarsUSD OK:", tarsUSD.length);
-    db.movARS=pMovARS(mARS); db.tars=pTars(tars);
-    db.movUSD=pMovUSD(mUSD); db.sav=pSav(sav);
-    db.tarsUSD=pTars(tarsUSD);
+    // Una sola request para todas las hojas
+    const url = SCRIPT + "?all=1";
+    const ctrl = new AbortController();
+    const timer = setTimeout(()=>ctrl.abort(), 20000);
+    const r = await fetch(url, {redirect:"follow", signal:ctrl.signal});
+    clearTimeout(timer);
+    const text = await r.text();
+    const d = JSON.parse(text);
+    if(d.all){
+      // Respuesta unificada - todo en una request
+      const all = d.all;
+      db.movARS  = pMovARS(all["Movimientos_ARS"]||[]);
+      db.tars    = pTars(all["Tarjetas_ARS"]||[]);
+      db.movUSD  = pMovUSD(all["Movimientos_USD"]||[]);
+      db.sav     = pSav(all["Ahorros_USD"]||[]);
+      db.tarsUSD = pTars(all["Tarjetas_USD"]||[]);
+    } else if(d.values){
+      // Fallback: respuesta individual
+      db.movARS = pMovARS(d.values);
+    }
     setSS("ok","Sincronizado ✓ ("+db.movARS.length+" mov)");
   } catch(e){ setSS("err","Sin conexión"); console.error(e); throw e; }
 }
